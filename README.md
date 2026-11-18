@@ -25,18 +25,21 @@ docker compose exec -T app pytest -q
 
 按源版本重建目标可见状态，删除墓碑拦截迟到旧写入；延迟与缺失分开定责。
 
+索引侧有、源端批次没有对应记录的孤存文档不直接当作撤稿：只有源端补齐水位已经越过该文档且观察期已满才记为「可下架」，否则保持「等待」；索引侧已是删除墓碑的直接「通过」。该结论在可见性重建中生成唯一编号，延迟门禁、双写对账和最终封存读取同一结论，不得各自改判。补发重试按批次与结论编号幂等，被新证据取代的旧结论不再展示但可历史追回。
+
 ## 演示
 
 1. 打开首页，核对当次计算、差异和隔离原因。
 2. 切换模块查看源行及裁决依据。
 3. 重跑相同样例，批次号与行数保持一致。
 4. 复核后导出一份证据CSV。版本已变化的复核提交返回409。
+5. `orphans.csv` 演示孤存待裁：可下架、等待、已消失三种结论在同一批内共存。
 
 ## 输入与输出
 
-输入列见 `docs/DATA-DICTIONARY.md`。项目包含dirty.csv、clean.csv、legacy.csv，统一走实际导入路径。上传限制4MB，拒绝不带时区的时间。业务键按字符串保留，Decimal参与计算，空值不会当零。
+输入列见 `docs/DATA-DICTIONARY.md`。项目包含dirty.csv、clean.csv、legacy.csv、orphans.csv，统一走实际导入路径。上传限制4MB，拒绝不带时区的时间。业务键按字符串保留，Decimal参与计算，空值不会当零。
 
-`POST /api/runs` 接收sample或csv；`GET /api/runs`返回历史批次；`POST /api/runs/<id>/review`需要version与decision；`GET /api/runs/<id>/archive`返回唯一证据导出。
+`POST /api/runs` 接收sample或csv；`GET /api/runs`返回历史批次；`POST /api/runs/<id>/review`需要version与decision；`GET /api/runs/<id>/archive`返回唯一证据导出。孤存结论见 `/api/runs/<id>/conclusions`、`/api/conclusions`、`/api/conclusions/history`，原始记录用 `/api/runs/<id>/records?doc_id=` 追回。
 
 ## 范围
 

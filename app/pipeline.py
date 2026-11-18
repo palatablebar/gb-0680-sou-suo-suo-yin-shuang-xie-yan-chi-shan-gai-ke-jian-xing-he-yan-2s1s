@@ -13,7 +13,7 @@ from app.modules.m6_parity.rules import evaluate as stage6
 from app.modules.m7_backfills.rules import evaluate as stage7
 STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7]
 def load_sample(name):
-    if name not in {"dirty.csv","clean.csv","legacy.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
+    if name not in {"dirty.csv","clean.csv","legacy.csv","orphans.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
     return (ROOT/"sample_data"/name).read_bytes()
 def calculate(raw,params=None,stop=6):
     params=params or {};started=time.monotonic();context={"parameters":params,"raw":raw,"quarantine":[]};stages=[];rows=[]
@@ -25,7 +25,15 @@ def calculate(raw,params=None,stop=6):
         result["cumulative_quarantine"]=list(context["quarantine"])
         context[MODULES[index][0]]=result
         stages.append(result)
-    return {"run_id":digest(raw,params)[:20],"stages":stages,"manifest":manifest(raw,params,started),"parameters":params}
+    result={"run_id":digest(raw,params)[:20],"stages":stages,"manifest":manifest(raw,params,started),"parameters":params}
+    # 批次级孤存结论：直接取最后阶段的同一份结论，供落库、对账与封存共用。
+    final=stages[-1]
+    if final.get("orphan_conclusions") is not None:
+        result["orphan_conclusions"]=final["orphan_conclusions"]
+        result["conclusion_digest"]=final.get("conclusion_digest")
+    if len(stages) > 3 and stages[3].get("orphan_policy"):
+        result["orphan_policy"]=stages[3]["orphan_policy"]
+    return result
 def execute(raw,params=None):
     result=calculate(raw,params);return store.save(result["run_id"],result)
 def stage_preview(index,payload):

@@ -31,6 +31,16 @@
 | TRAP-09 | 超大版本 | JSON精度损失 | 文本序列化 | `app/values.py` | `tests/test_m2.py::test_large_version_precise` |
 | TRAP-13 | 删除后迟到旧写 | 文档复活 | 最大版本墓碑 | `app/modules/m3_versions/rules.py` | `tests/test_m3.py::test_tombstone_beats_late_old_write` |
 | TRAP-23 | 延迟阈值边界 | 多判延迟 | 等于阈值通过 | `app/modules/m5_latency/rules.py` | `tests/test_m5.py::test_threshold_equal_pass` |
+| TRAP-27 | 索引孤存 | 缺记录即当撤稿 | 源端水位覆盖且观察期满才可下架 | `app/orphans.py` | `tests/test_orphans.py::test_orphan_not_covered_by_source_watermark_keeps_waiting` |
+| TRAP-28 | 孤存结论各算各的 | 门禁按延迟、对账按缺失去向 | 单一结论编号贯穿 M4→M7，分叉即报错 | `app/orphans.py` | `tests/test_orphans.py::test_same_conclusion_feeds_latency_parity_and_archive` |
+| TRAP-29 | 补发重试重复旧结论 | 每次重跑再写一条 | 批次键+结论编号去重，旧结论可历史追回 | `app/store.py` | `tests/test_orphans.py::test_retry_does_not_duplicate_old_conclusions` |
+| TRAP-30 | 补发后旧结论残留 | 只按结论表最新行判断 | 批次游标推进，当前结论取最新运行 | `app/store.py` | `tests/test_orphans.py::test_new_evidence_supersedes_and_old_conclusion_recoverable` |
+
+## 孤存裁决
+
+索引侧有、源端批次无的文档由 `app/orphans.py` 唯一裁决：`ORPHAN_WAITING`（等待）、`ORPHAN_RETIRABLE`（可下架）、`ORPHAN_SETTLED`（索引侧已删除，通过）。可下架要求源端补齐水位覆盖该索引事件且观察期（默认600秒）已满；水位取自本批源端记录的最晚源时刻或显式参数，无法确认时一律等待。源端存在被隔离记录的文档不得按缺失裁决。
+
+M4 生成结论并写入 `conclusion_id`/`conclusion_evidence`，M5、M6、M7 只读取并用 `orphans.verify` 校验，同一批次各阶段 `conclusion_digest` 必须一致，封存导出的 `conclusion` 行使用同一编号。补发重试按批次键（`batch_id`，缺省运行号）与（文档，结论编号）幂等；新证据使结论变化时，旧结论移出当前视图，但仍保留在结论历史与原始批次载荷中。
 
 ## 对账规则
 

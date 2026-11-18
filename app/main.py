@@ -45,6 +45,19 @@ def create_app():
         from app.archive import build_archive
         run=store.get(run_id)
         return application.response_class(build_archive(run),mimetype="text/csv",headers={"Content-Disposition":'attachment; filename="evidence.csv"'})
+    @application.get("/api/runs/<run_id>/conclusions")
+    def run_conclusions(run_id):
+        run=store.get(run_id)
+        return {"run_id":run_id,"conclusion_digest":run.get("conclusion_digest"),"conclusions":store.conclusions(run_id)}
+    @application.get("/api/runs/<run_id>/records")
+    def run_records(run_id):
+        return store.raw_records(run_id,request.args.get("doc_id"))
+    @application.get("/api/conclusions")
+    def conclusions():
+        return {"conclusions":store.conclusions(batch=request.args.get("batch"))}
+    @application.get("/api/conclusions/history")
+    def conclusion_history():
+        return {"conclusions":store.conclusion_history(request.args.get("doc_id"),request.args.get("batch"))}
     for index,(slug,title) in enumerate(MODULES,1):
         module=importlib.import_module(f"app.modules.m{index}_{slug}.handler")
         application.register_blueprint(module.bp)
